@@ -1,104 +1,102 @@
+import EventEmitter from "events";
 import {
-  Guild,
   Client,
+  Guild,
+  GuildMember,
   Message,
-  Snowflake,
-  VoiceChannel,
-  TextChannel,
-  CategoryChannel,
   StageChannel,
-  NewsChannel,
-  ThreadChannel,
-} from 'discord.js'
-import {
-  Queue,
-  PlayerOptions,
-  QueueOptions,
-  DefaultModesTypes,
-  PlayerEvents,
-  QueueAudioFilters,
+  User,
+  VoiceChannel,
   Awaitable,
-  PlayerRepeatModes,
-} from './instances'
-import {
-  AudioPlayer,
-  PlayerSubscription,
-  VoiceConnection,
-} from '@discordjs/voice'
-import { EventEmitter } from 'events'
+} from "discord.js";
+import { Options, Playlist, Track } from "./Instances";
 
-export class Player extends EventEmitter {
-  public constructor(Client: Client, PlayerOptions?: PlayerOptions)
-  public readonly Client: Client
-  public readonly PlayerOptions: PlayerOptions
-  public readonly connections: {
-    voiceConnection: VoiceConnection[]
-    playing: Queue[]
-    paused: Queue[]
-  }
-  public readonly type: String
-  public CreateQueue(
-    GuildId: Guild['id'] | String,
-    QueueCreateOptions?: QueueOptions,
-  ): Queue | void
-  public GetQueue(guildId: Guild['id'] | Snowflake | String): Queue | void
-  public DeleteQueue(guildId: Guild['id'] | Snowflake | String): undefined
+declare interface playerEvents {
+  error: [
+    date: Date,
+    queue: queue | player | void,
+    message: string,
+    variables: object,
+    location: string | void,
+    metadata: string
+  ];
+  raw: [data: Date, metadata: string, variables: object];
+  debug: [eventName: string, message: string, variables: object];
+  trackEnd: [queue: queue, track: Track, remainingTracks: Track[]];
+  queueEnd: [queue: queue, track: Track, previousTracks: Track[]];
+  trackStart: [queue: queue, track: Track];
+  playlistAdd: [queue: queue, playlist: Playlist, user: User | GuildMember];
+  trackAdd: [
+    queue: queue,
+    track: Track,
+    playlist: Playlist,
+    user: User | GuildMember,
+    tracks: Track[]
+  ];
+  connectionError: [queue: queue];
+}
+declare class player extends EventEmitter {
+  constructor(discordClient: Client, options?: Options);
+  public readonly discordClient: Client;
+  public readonly options: Options;
+  public get type(): string | "player";
+  public createQueue(
+    guildId: Guild["id"] | String | Number,
+    forceCreate?: boolean | false,
+    options?: Options
+  ): Promise<queue>;
+  public getQueue(
+    guildId: Guild["id"] | String | Number,
+    options?: Options,
+    forceGet?: Boolean | false
+  ): Promise<queue>;
+  public destroyQueue(
+    guildId: Guild["id"] | String | Number,
+    destroyConnection?: Boolean | true,
+    options?: Options
+  ): Promise<Boolean | undefined>;
 
-  public on<K extends keyof PlayerEvents>(
+  public on<K extends keyof playerEvents>(
     event: K,
-    listener: (...args: PlayerEvents[K]) => Awaitable<void>,
-  ): this
+    listener: (...args: playerEvents[K]) => Awaitable<void>
+  ): this;
   public on<S extends string | symbol>(
-    event: Exclude<S, keyof PlayerEvents>,
-    listener: (...args: any[]) => Awaitable<void>,
-  ): this
+    event: Exclude<S, keyof playerEvents>,
+    listener: (...args: any[]) => Awaitable<void>
+  ): this;
 }
 
-export class Utils {
-  public static ScanDeps(PackageName: String | void): String | Number | void
-  public static ResolverLTE(
-    RawValue:
-      | String
-      | Number
-      | Object
-      | Snowflake
-      | Guild
-      | Message
-      | TextChannel
-      | CategoryChannel
-      | VoiceChannel
-      | StageChannel
-      | NewsChannel
-      | ThreadChannel,
-    ReturnType: String | void,
-  ): String | Snowflake | void
-}
-
-export class VoiceUtils {
-  public static join(
-    Client: Client,
-    Channel: VoiceChannel,
-    JoinChannelOptions?: {
-      force: Boolean
-    },
-  ): Promise<VoiceConnection> | void
-
-  public static disconnect(
-    guildId: Guild['id'] | String | Number,
-    DisconnectChannelOptions?: {
-      destroy?: Boolean
-      MusicPlayer?: AudioPlayer
-      Subscription?: PlayerSubscription
-      Player?: Player
-    },
-    Timedout?: Number | String | void,
-  ): undefined
-}
-
-export {
-  DefaultModesTypes,
-  DefaultModesTypes as PlayerModesTypes,
-  QueueAudioFilters,
-  QueueAudioFilters as AudioFilters,
-  PlayerRepeatModes,
+export class queue {
+  constructor(
+    guildId: Guild["id"] | string | number,
+    options: Options,
+    player: player
+  );
+  public readonly discordClient: Client;
+  public readonly guildId: Guild["id"] | string | number;
+  public readonly player: player;
+  public readonly destroyed: boolean | false;
+  public get type(): string | "queue";
+  public get playing(): Boolean;
+  public get paused(): Boolean;
+  public get current(): Track | undefined;
+  public get tracks(): Track[] | undefined;
+  play(
+    rawQuery: string,
+    voiceSnowflake: string | number | VoiceChannel | StageChannel | Message,
+    requestedBy: User | string | number | GuildMember,
+    options?: Options
+  ): Promise<Boolean | undefined>;
+  skip(
+    forceSkip?: Boolean | false,
+    trackCount?: Number | 1
+  ): Promise<Boolean | undefined>;
+  stop(
+    forceStop?: Boolean | false,
+    preserveTracks?: Boolean | false
+  ): Promise<Boolean | undefined>;
+  destroy(
+    delayVoiceTimeout?: Number | 0,
+    destroyConnection?: Boolean | false
+  ): Promise<Boolean | undefined>;
 }
